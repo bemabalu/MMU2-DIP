@@ -35,8 +35,8 @@
 
 // SG_THR stallguard treshold (sensitivity),  TMC2209: 0...255. TMC2130: 63...-64
 // !!! This setting is not universal, and the values set by different machines are different !!!
-#define TMC_SG_THR_SEL     50  //TMC2209 set to about 50, TMC2130 Set to about 31
-#define TMC_SG_THR_IDL     20  //TMC2209 set to about 20, TMC2130 Set to about 19
+#define TMC_SG_THR_SEL     6    //TMC2209 set to about 50, TMC2130 Set to about 31
+#define TMC_SG_THR_IDL     15  //TMC2209 set to about 20, TMC2130 Set to about 19
 
 
 #define TMC_TPOWERDOWN     68     // TCOOLTHRS default
