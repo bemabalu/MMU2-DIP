@@ -84,20 +84,20 @@ void motion_set_idler_selector(uint8_t idler, uint8_t selector)
   }
 }
 
-static void check_idler_drive_error()
-{
-  // const uint8_t tries = 2;
-  // for (uint8_t i = 0; i <= tries; ++i)
-  // {
-  //   if (!tmc_read_gstat()) break;
-  //   else
-  //   {
-  //     if (tries == i) unrecoverable_error();
-  //     drive_error();
-  //     rehome_idler();
-  //   }
-  // }
-}
+// static void check_idler_drive_error()
+// {
+//   const uint8_t tries = 2;
+//   for (uint8_t i = 0; i <= tries; ++i)
+//   {
+//     if (!tmc_read_gstat()) break;
+//     else
+//     {
+//       if (tries == i) unrecoverable_error();
+//       drive_error();
+//       rehome_idler();
+//     }
+//   }
+// }
 
 void motion_engage_idler()
 {
@@ -140,7 +140,7 @@ static void unload_to_finda()
     }
     delayMicroseconds(delay);
     
-    if (digitalRead(FIL_RUNOUT) != 1) _endstop_hit++;
+    if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING) _endstop_hit++;
 
   }
 }
@@ -203,7 +203,7 @@ void motion_unload_to_finda()
   {
     unload_to_finda();
     // if (tmc_read_gstat() && digitalRead(FIL_RUNOUT) == 1)
-    if (digitalRead(FIL_RUNOUT) == 1)
+    if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
     {
       if (tries == tr) unrecoverable_error();
       drive_error();
