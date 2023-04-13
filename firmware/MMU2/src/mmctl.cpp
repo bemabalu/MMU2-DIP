@@ -15,12 +15,12 @@
 #include "config.h"
 #include "pins.h"
 
-//so mmu;
+// so mmu;
 //! Keeps track of selected filament. It is used for LED signalization and it is backed up to permanent storage
 //! so MMU can unload filament after power loss.
-int active_extruder = 0;            
+int active_extruder = 0;
 //! Keeps track of filament crossing selector. Selector can not be moved if filament crosses it.
-bool isFilamentLoaded = false;        
+bool isFilamentLoaded = false;
 
 //! Number of pulley steps to eject and un-eject filament
 static const int eject_steps = 2500;
@@ -36,29 +36,21 @@ static const int eject_steps = 2500;
 //! @retval false Selector is not probably aligned on FINDA ,FINDA was not switched ON
 bool feed_filament(bool timeout)
 {
-	bool loaded = false;
-	const uint_least8_t finda_limit = 10;
+  bool loaded = false;
+  const uint_least8_t finda_limit = 10;
   uint8_t current_running_normal[3] = CURRENT_RUNNING_NORMAL;
   uint8_t current_holding_normal[3] = CURRENT_HOLDING_NORMAL;
   uint8_t current_running_stealth[3] = CURRENT_RUNNING_STEALTH;
   uint8_t current_holding_stealth[3] = CURRENT_HOLDING_STEALTH;
 
-	motion_engage_idler();
-	set_pulley_dir_push();
-	if(tmc_mode == NORMAL_MODE)
-	{       
-		tmc_current_normal(pulley, AX_PUL, current_holding_normal[1], current_running_normal[1]);
-	}
-	else
-	{
-		tmc_current_stealth(pulley, AX_PUL, current_holding_stealth[1], current_running_stealth[1]); //probably needs tuning of currents
-	}
+  motion_engage_idler();
+  set_pulley_dir_push();
 
-	{
-	  uint_least8_t blinker = 0;
-	  uint_least8_t button_blanking = 0;
-	  const uint_least8_t button_blanking_limit = 11;
-	  uint_least8_t finda_triggers = 0;
+  {
+    uint_least8_t blinker = 0;
+    uint_least8_t button_blanking = 0;
+    const uint_least8_t button_blanking_limit = 11;
+    uint_least8_t finda_triggers = 0;
 
     for (unsigned int steps = 0; !timeout || (steps < 1500); ++steps)
     {
@@ -73,10 +65,12 @@ bool feed_filament(bool timeout)
       {
         shr16_set_led(0x000);
         blinker = 0;
-        if (button_blanking <= button_blanking_limit) ++button_blanking;
+        if (button_blanking <= button_blanking_limit)
+          ++button_blanking;
       }
 
-      if (digitalRead(FIL_RUNOUT) == 1) ++finda_triggers ;
+      if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
+        ++finda_triggers;
       if (finda_triggers >= finda_limit)
       {
         loaded = true;
@@ -88,24 +82,24 @@ bool feed_filament(bool timeout)
       }
       delayMicroseconds(4000);
     }
-	}
+  }
 
-	if (loaded)
-	{
-		// unload to PTFE tube
-		set_pulley_dir_pull();
-		for (int i = 600 + finda_limit; i > 0; i--)
-		{
-			do_pulley_step();
-			delayMicroseconds(3000);
-		}
-	}
+  if (loaded)
+  {
+    // unload to PTFE tube
+    set_pulley_dir_pull();
+    for (int i = 600 + finda_limit; i > 0; i--)
+    {
+      do_pulley_step();
+      delayMicroseconds(3000);
+    }
+  }
 
-	tmc_disable_axis(AX_PUL);
-	motion_disengage_idler();
-	shr16_set_led(1 << 2 * (4 - active_extruder));
+  motion_disengage_idler();
+  tmc_disable_axis(AX_PUL);
+  shr16_set_led(1 << 2 * (4 - active_extruder));
 
-	return loaded;
+  return loaded;
 }
 
 //! @brief Try to resolve non-loaded filamnt to selector
@@ -115,38 +109,52 @@ bool feed_filament(bool timeout)
 //! middle | Try to rehome selector and align filament to FINDA if it success, blinking will stop
 //! right  | If no red LED is blinking, resume print, else same as middle button
 //!
-void resolve_failed_loading(){
+void resolve_failed_loading()
+{
   bool resolved = false;
   bool exit = false;
-  while(!exit){
+  while (!exit)
+  {
     switch (buttonClicked())
     {
-      case Btn::middle:
+    case Btn::middle:
+      rehome();
+      motion_set_idler_selector(active_extruder);
+      if (feed_filament(true))
+      {
+        resolved = true;
+      }
+      break;
+
+    case Btn::right:
+      if (!resolved)
+      {
         rehome();
         motion_set_idler_selector(active_extruder);
-        if(feed_filament(true)){resolved = true;}
+        if (feed_filament(true))
+        {
+          resolved = true;
+        }
+      }
+
+      if (resolved)
+      {
+        motion_set_idler_selector(active_extruder);
+        motion_engage_idler();
+        exit = true;
+      }
       break;
 
-      case Btn::right:
-        if(!resolved){
-          rehome();
-          motion_set_idler_selector(active_extruder);
-          if(feed_filament(true)){resolved = true;}
-        }
-        
-        if(resolved){
-          motion_set_idler_selector(active_extruder);
-          motion_engage_idler();          
-          exit = true;
-        }
-      break;
+    default:
+      if (resolved)
+      {
+        signal_ok_after_load_failure();
+      }
+      else
+      {
+        signal_load_failure();
+      }
 
-      default:
-        if(resolved){
-          signal_ok_after_load_failure();}
-        else{
-          signal_load_failure();}
-        
       break;
     }
   }
@@ -162,9 +170,9 @@ void resolve_failed_loading(){
 //! @param new_extruder Filament to be selected
 void switch_extruder_withSensor(int new_extruder)
 {
-	shr16_set_led(2 << 2 * (4 - active_extruder));
+  shr16_set_led(2 << 2 * (4 - active_extruder));
 
-	active_extruder = new_extruder;
+  active_extruder = new_extruder;
 
   if (isFilamentLoaded)
   {
@@ -180,8 +188,8 @@ void switch_extruder_withSensor(int new_extruder)
     load_filament_withSensor();
   }
 
-	shr16_set_led(0x000);
-	shr16_set_led(1 << 2 * (4 - active_extruder));
+  shr16_set_led(0x000);
+  shr16_set_led(1 << 2 * (4 - active_extruder));
 }
 
 //! @brief Select filament
@@ -192,14 +200,14 @@ void switch_extruder_withSensor(int new_extruder)
 //! @param new_extruder Filament to be selected
 void select_extruder(int new_extruder)
 {
-	shr16_set_led(2 << 2 * (4 - active_extruder));
+  shr16_set_led(2 << 2 * (4 - active_extruder));
 
-	active_extruder = new_extruder;
+  active_extruder = new_extruder;
 
-  motion_set_idler_selector((new_extruder < EXTRUDERS) ? new_extruder : (EXTRUDERS - 1) , new_extruder);
+  motion_set_idler_selector((new_extruder < EXTRUDERS) ? new_extruder : (EXTRUDERS - 1), new_extruder);
 
-	shr16_set_led(0x000);
-	shr16_set_led(1 << 2 * (4 - active_extruder));
+  shr16_set_led(0x000);
+  shr16_set_led(1 << 2 * (4 - active_extruder));
 }
 
 //! @brief cut filament
@@ -211,11 +219,13 @@ void mmctl_cut_filament(uint8_t filament)
 
   active_extruder = filament;
 
-  if (isFilamentLoaded)  unload_filament_withSensor();
+  if (isFilamentLoaded)
+    unload_filament_withSensor();
 
   motion_set_idler_selector(filament, filament);
 
-  if (!feed_filament(true)) resolve_failed_loading();
+  if (!feed_filament(true))
+    resolve_failed_loading();
 
   tmc_init_axis(pulley, AX_PUL, (TMC_MODE)tmc_mode);
   // tmc_begin();
@@ -243,7 +253,10 @@ void mmctl_cut_filament(uint8_t filament)
   motion_set_idler_selector(filament, 5);
   motion_set_idler_selector(filament, 0);
   motion_set_idler_selector(filament, filament);
-  if (!feed_filament(true)){resolve_failed_loading();}
+  if (!feed_filament(true))
+  {
+    resolve_failed_loading();
+  }
 }
 
 //! @brief eject filament
@@ -259,7 +272,8 @@ void eject_filament(uint8_t filament)
   active_extruder = filament;
   const uint8_t selector_position = (filament <= 2) ? 4 : 0;
 
-  if (isFilamentLoaded)  unload_filament_withSensor();
+  if (isFilamentLoaded)
+    unload_filament_withSensor();
 
   tmc_init_axis(pulley, AX_PUL, (TMC_MODE)tmc_mode);
 
@@ -305,7 +319,7 @@ static bool checkOk()
 
   // filament in FINDA, let's try to unload it
   set_pulley_dir_pull();
-  if (digitalRead(FIL_RUNOUT) == 1)
+  if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
   {
     _steps = 3000;
     _endstop_hit = 0;
@@ -314,12 +328,13 @@ static bool checkOk()
       do_pulley_step();
       // delay(3);
       delayMicroseconds(3000);
-      if (digitalRead(FIL_RUNOUT) != 1) _endstop_hit++;
+      if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING)
+        _endstop_hit++;
       _steps--;
     } while (_steps > 0 && _endstop_hit < 50);
   }
 
-  if (digitalRead(FIL_RUNOUT) != 1)
+  if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING)
   {
     // looks ok, load filament to FINDA
     set_pulley_dir_push();
@@ -331,7 +346,8 @@ static bool checkOk()
       do_pulley_step();
       // delay(3);
       delayMicroseconds(3000);
-      if (digitalRead(FIL_RUNOUT) == 1) _endstop_hit++;
+      if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
+        _endstop_hit++;
       _steps--;
     } while (_steps > 0 && _endstop_hit < 50);
 
@@ -345,14 +361,13 @@ static bool checkOk()
       // looks ok !
       // unload to PTFE tube
       set_pulley_dir_pull();
-      for (int i = 600; i > 0; i--)   // 570
+      for (int i = 600; i > 0; i--) // 570
       {
         do_pulley_step();
         delayMicroseconds(3000);
       }
       _ret = true;
     }
-
   }
   else
   {
@@ -402,14 +417,14 @@ void load_filament_withSensor(bool disengageIdler)
     _loadSteps++;
     // delay(5);
     delayMicroseconds(5500);
-  } while (digitalRead(FIL_RUNOUT) != 1 && _loadSteps < 1500); // adc[0];
+  } while (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING && _loadSteps < 1500); // adc[0];
 
   // filament did not arrived at FINDA, let's try to correct that
-  if (digitalRead(FIL_RUNOUT) != 1)                
+  if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING)
   {
     for (int i = 6; i > 0; i--)
     {
-      if (digitalRead(FIL_RUNOUT) != 1)
+      if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING)
       {
         // attempt to correct
         set_pulley_dir_pull();
@@ -428,14 +443,15 @@ void load_filament_withSensor(bool disengageIdler)
           _loadSteps++;
           // delay(4);
           delayMicroseconds(4000);
-          if (digitalRead(FIL_RUNOUT) == 1) _endstop_hit++;
-        } while (_endstop_hit<100 && _loadSteps < 500);
+          if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
+            _endstop_hit++;
+        } while (_endstop_hit < 100 && _loadSteps < 500);
       }
     }
   }
 
   // still not at FINDA, error on loading, let's wait for user input
-  if (digitalRead(FIL_RUNOUT) != 1)
+  if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING)
   {
     bool _continue = false;
     bool _isOk = false;
@@ -454,40 +470,40 @@ void load_filament_withSensor(bool disengageIdler)
 
       switch (buttonPressed())
       {
-        case Btn::left:
-          // just move filament little bit
-          motion_engage_idler();
-          set_pulley_dir_push();
+      case Btn::left:
+        // just move filament little bit
+        motion_engage_idler();
+        set_pulley_dir_push();
 
-          for (int i = 0; i < 200; i++)
-          {
-            do_pulley_step();
-            delayMicroseconds(5500);
-          }
-          motion_disengage_idler();
-          break;
-        case Btn::middle:
-          // check if everything is ok
-          motion_engage_idler();
-          _isOk = checkOk();
-          motion_disengage_idler();
-          break;
-        case Btn::right:
-          // continue with loading
-          motion_engage_idler();
-          _isOk = checkOk();
-          motion_disengage_idler();
+        for (int i = 0; i < 200; i++)
+        {
+          do_pulley_step();
+          delayMicroseconds(5500);
+        }
+        motion_disengage_idler();
+        break;
+      case Btn::middle:
+        // check if everything is ok
+        motion_engage_idler();
+        _isOk = checkOk();
+        motion_disengage_idler();
+        break;
+      case Btn::right:
+        // continue with loading
+        motion_engage_idler();
+        _isOk = checkOk();
+        motion_disengage_idler();
 
-          if (_isOk) //pridat do podminky flag ze od tiskarny prislo continue
-          {
-            _continue = true;
-          }
-          break;
-        default:
-          break;
+        if (_isOk) // pridat do podminky flag ze od tiskarny prislo continue
+        {
+          _continue = true;
+        }
+        break;
+      default:
+        break;
       }
 
-    } while ( !_continue );
+    } while (!_continue);
 
     motion_engage_idler();
     set_pulley_dir_push();
@@ -497,7 +513,7 @@ void load_filament_withSensor(bool disengageIdler)
       do_pulley_step();
       _loadSteps++;
       delayMicroseconds(5500);
-    } while (digitalRead(FIL_RUNOUT) != 1 && _loadSteps < 1500);
+    } while (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING && _loadSteps < 1500);
     // ?
   }
   else
@@ -508,8 +524,9 @@ void load_filament_withSensor(bool disengageIdler)
   motion_feed_to_bondtech();
 
   tmc_disable_axis(AX_PUL);
-  if (disengageIdler) motion_disengage_idler();
-  isFilamentLoaded = true;  // filament loaded
+  if (disengageIdler)
+    motion_disengage_idler();
+  isFilamentLoaded = true; // filament loaded
 }
 
 void unload_filament_withSensor()
@@ -519,7 +536,7 @@ void unload_filament_withSensor()
 
   motion_engage_idler(); // if idler is in parked position un-park him get in contact with filament
 
-  if (digitalRead(FIL_RUNOUT) == 1)
+  if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
   {
     motion_unload_to_finda();
   }
@@ -532,8 +549,6 @@ void unload_filament_withSensor()
     }
   }
 
-
-
   // move a little bit so it is not a grinded hole in filament
   for (int i = 100; i > 0; i--)
   {
@@ -541,14 +556,12 @@ void unload_filament_withSensor()
     delayMicroseconds(5000);
   }
 
-
-
   // FINDA is still sensing filament, let's try to unload it once again
-  if (digitalRead(FIL_RUNOUT) == 1)
+  if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
   {
     for (int i = 6; i > 0; i--)
     {
-      if (digitalRead(FIL_RUNOUT) == 1)
+      if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
       {
         set_pulley_dir_push();
         for (int i = 150; i > 0; i--)
@@ -565,16 +578,16 @@ void unload_filament_withSensor()
           do_pulley_step();
           _steps--;
           delayMicroseconds(3000);
-          if (digitalRead(FIL_RUNOUT) != 1) _endstop_hit++;
+          if (digitalRead(FIL_RUNOUT) != FILAMENT_SENSOR_INVERTING)
+            _endstop_hit++;
         } while (_endstop_hit < 100 && _steps > 0);
       }
       delay(100);
     }
-
   }
 
   // error, wait for user input
-  if (digitalRead(FIL_RUNOUT) == 1)
+  if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
   {
     bool _continue = false;
     bool _isOk = false;
@@ -632,7 +645,6 @@ void unload_filament_withSensor()
         break;
       }
 
-
     } while (!_continue);
 
     shr16_set_led(1 << 2 * (4 - active_extruder));
@@ -643,7 +655,7 @@ void unload_filament_withSensor()
     // correct unloading
     // unload to PTFE tube
     set_pulley_dir_pull();
-    for (int i = 450; i > 0; i--)   // 570
+    for (int i = 450; i > 0; i--) // 570
     {
       do_pulley_step();
       delayMicroseconds(5000);

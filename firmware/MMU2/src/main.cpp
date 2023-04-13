@@ -19,7 +19,7 @@
 #include "trinamic.h"
 
 #if (UART_COM == 1)
-FILE* uart_com = uart1io;
+FILE *uart_com = uart1io;
 #endif //(UART_COM == 1)
 
 uint8_t tmc_mode = STEALTH_MODE;
@@ -29,15 +29,14 @@ namespace
   //! @brief State
   enum class S
   {
-  Idle,
-  Setup,
-  Printing,
-  SignalFilament,
-  Wait,
-  WaitOk,
+    Idle,
+    Setup,
+    Printing,
+    SignalFilament,
+    Wait,
+    WaitOk,
   };
 }
-
 
 //! @brief Main MMU state
 //!
@@ -127,8 +126,8 @@ void signal_ok_after_load_failure()
 //! @retval false not present any more
 bool filament_presence_signaler()
 {
-  if (digitalRead(FIL_RUNOUT))
-  {  
+  if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
+  {
     signal_filament_present();
     return true;
   }
@@ -161,11 +160,11 @@ bool filament_presence_signaler()
 //! @n b - blinking
 void check_filament_not_present()
 {
-  while (digitalRead(FIL_RUNOUT) == 1)
+  while (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
   {
     while (Btn::right != buttonPressed())
     {
-      if (digitalRead(FIL_RUNOUT) == 1)
+      if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
       {
         signal_filament_present();
       }
@@ -251,7 +250,7 @@ void setup(void)
   permanentStorageInit();
   shr16_init(); // shift register
   led_blink(0);
-  uart1_init(); //uart1
+  uart1_init(); // uart1
   led_blink(1);
 
   tmc_begin();
@@ -270,19 +269,20 @@ void setup(void)
   }
 
   tmc_init(HOMING_MODE);
-  
+
   uint8_t filament;
   if (FilamentLoaded::get(filament))
   {
     motion_set_idler(filament);
   }
 
-  if (digitalRead(FIL_RUNOUT) == 1) isFilamentLoaded = true;
+  if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
+    isFilamentLoaded = true;
 
-  #ifdef TMC_DEBUG
+#ifdef TMC_DEBUG
   test_tmc_connection();
-  #endif
-  printf_P("start\r\n"); //startup message
+#endif
+  printf_P("start\r\n"); // startup message
 }
 
 //! @brief Select filament menu
@@ -314,28 +314,29 @@ void manual_extruder_selector()
 {
   shr16_set_led(1 << 2 * (4 - active_extruder));
 
-  if ((Btn::left|Btn::right) & buttonPressed())
+  if ((Btn::left | Btn::right) & buttonPressed())
   {
     delay(100);
-    if (digitalRead(FIL_RUNOUT))
+    if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
     {
       signal_filament_present();
-      return ;
+      return;
     }
     switch (buttonPressed())
     {
-      case Btn::right:
-        if (active_extruder < 5)
-        {
-          select_extruder(active_extruder + 1);
-        }
-        break;
-      case Btn::left:
-        if (active_extruder > 0) select_extruder(active_extruder - 1);
-        break;
+    case Btn::right:
+      if (active_extruder < 5)
+      {
+        select_extruder(active_extruder + 1);
+      }
+      break;
+    case Btn::left:
+      if (active_extruder > 0)
+        select_extruder(active_extruder - 1);
+      break;
 
-      default:
-        break;
+    default:
+      break;
     }
     delay(100);
   }
@@ -347,7 +348,6 @@ void manual_extruder_selector()
     shr16_set_led(1 << 2 * 0);
     delay(50);
   }
-
 }
 
 //! @brief main loop
@@ -364,57 +364,61 @@ void loop(void)
   process_commands();
   switch (state)
   {
-    case S::Setup:
-      if (!setupMenu()) state = S::Idle;
-      break;
-    case S::Printing:
-      break;
-    case S::SignalFilament:
-      if (!filament_presence_signaler()) state = S::Idle;
-      break;
-    case S::Idle:
-      manual_extruder_selector();
-      if (Btn::middle == buttonPressed() && active_extruder < 5)
+  case S::Setup:
+    if (!setupMenu())
+      state = S::Idle;
+    break;
+  case S::Printing:
+    break;
+  case S::SignalFilament:
+    if (!filament_presence_signaler())
+      state = S::Idle;
+    break;
+  case S::Idle:
+    manual_extruder_selector();
+    if (Btn::middle == buttonPressed() && active_extruder < 5)
+    {
+      delay(200);
+      shr16_set_led(2 << 2 * (4 - active_extruder));
+      if (Btn::middle == buttonPressed())
       {
-        delay(200);
-        shr16_set_led(2 << 2 * (4 - active_extruder));
-        if (Btn::middle == buttonPressed())
-        {
-          motion_set_idler_selector(active_extruder);
-          feed_filament();
-        }
+        motion_set_idler_selector(active_extruder);
+        feed_filament();
       }
+    }
+    break;
+  case S::Wait:
+    signal_load_failure();
+    switch (buttonClicked())
+    {
+    case Btn::middle:
+      if (mmctl_IsOk())
+        state = S::WaitOk;
       break;
-    case S::Wait:
-      signal_load_failure();
-      switch (buttonClicked())
-      {
-      case Btn::middle:
-        if (mmctl_IsOk()) state = S::WaitOk;
-        break;
-      case Btn::right:
-        state = S::Idle;
-        printf_P(PSTR("ok\n"));
-        break;
-      default:
-        break;
-      }
+    case Btn::right:
+      state = S::Idle;
+      printf_P(PSTR("ok\n"));
       break;
-    case S::WaitOk:
-      signal_ok_after_load_failure();
-      switch (buttonClicked())
-      {
-      case Btn::middle:
-        if (!mmctl_IsOk()) state = S::Wait;
-        break;
-      case Btn::right:
-        state = S::Idle;
-        printf_P(PSTR("ok\n"));
-        break;
-      default:
-        break;
-      }
+    default:
       break;
+    }
+    break;
+  case S::WaitOk:
+    signal_ok_after_load_failure();
+    switch (buttonClicked())
+    {
+    case Btn::middle:
+      if (!mmctl_IsOk())
+        state = S::Wait;
+      break;
+    case Btn::right:
+      state = S::Idle;
+      printf_P(PSTR("ok\n"));
+      break;
+    default:
+      break;
+    }
+    break;
   }
 }
 
@@ -435,18 +439,19 @@ void process_commands()
       line[count] = '\0';
       c = 0;
     }
-    if (count >= 32) count = 0;
+    if (count >= 32)
+      count = 0;
   }
   int value = 0;
   int value0 = 0;
 
   if ((count > 0) && (c == 0))
   {
-    //line received
-    // printf_P("adc:%d,%d\r\n",adc_val[0], adc_val[1]);
-    // printf_P("line received: '%s' %d\n", line, count);
+    // line received
+    //  printf_P("adc:%d,%d\r\n",adc_val[0], adc_val[1]);
+    //  printf_P("line received: '%s' %d\n", line, count);
     count = 0;
-      //! T<nr.> change to filament <nr.>
+    //! T<nr.> change to filament <nr.>
     if (sscanf(line, PSTR("T%d"), &value) > 0)
     {
       if ((value >= 0) && (value < EXTRUDERS))
@@ -456,17 +461,18 @@ void process_commands()
         printf_P("ok\n");
       }
     }
-        //! L<nr.> Load filament <nr.>
+    //! L<nr.> Load filament <nr.>
     else if (sscanf(line, PSTR("L%d"), &value) > 0)
     {
       if ((value >= 0) && (value < EXTRUDERS))
       {
-      if (isFilamentLoaded) state = S::SignalFilament;
-      else
-      {
-        select_extruder(value);
-        feed_filament();
-      }
+        if (isFilamentLoaded)
+          state = S::SignalFilament;
+        else
+        {
+          select_extruder(value);
+          feed_filament();
+        }
         printf_P("ok\n");
       }
     }
@@ -474,13 +480,19 @@ void process_commands()
     {
       //! M0 set to normal mode
       //!@n M1 set to stealth mode
-      switch (value) {
-      case 0: tmc_mode = NORMAL_MODE; break;
-      case 1: tmc_mode = STEALTH_MODE; break;
-      default: return;
+      switch (value)
+      {
+      case 0:
+        tmc_mode = NORMAL_MODE;
+        break;
+      case 1:
+        tmc_mode = STEALTH_MODE;
+        break;
+      default:
+        return;
       }
 
-      //init all axes
+      // init all axes
       tmc_init((TMC_MODE)tmc_mode);
       printf_P("ok\n");
     }
@@ -495,32 +507,31 @@ void process_commands()
     }
     else if (sscanf(line, PSTR("X%d"), &value) > 0)
     {
-      if (value == 0)   //! X0 MMU reset
-      IWatchdog.begin(1000);
+      if (value == 0) //! X0 MMU reset
+        IWatchdog.begin(1000);
     }
     else if (sscanf(line, PSTR("P%d"), &value) > 0)
     {
       if (value == 0) //! P0 Read finda
       {
-      if(digitalRead(FIL_RUNOUT) == 1)
-      {
-        printf_P("1ok\n");
+        if (digitalRead(FIL_RUNOUT) == FILAMENT_SENSOR_INVERTING)
+        {
+          printf_P("1ok\n");
+        }
+        else
+        {
+          printf_P("0ok\n");
+        }
       }
-      else
-      {
-        printf_P("0ok\n");
-      }    
-      }
-      
     }
     else if (sscanf(line, PSTR("S%d"), &value) > 0)
     {
       if (value == 0) //! S0 return ok
-      printf_P("ok\n");
+        printf_P("ok\n");
       else if (value == 1) //! S1 Read version
-      printf_P("%dok\n", fw_version);
+        printf_P("%dok\n", fw_version);
       else if (value == 2) //! S2 Read build nr.
-      printf_P("%dok\n", fw_buildnr);
+        printf_P("%dok\n", fw_buildnr);
       else if (value == 3) //! S3 Read drive errors
         printf_P("%dok\n", DriveError::get());
     }
@@ -528,10 +539,10 @@ void process_commands()
     else if (sscanf(line, PSTR("F%d %d"), &value, &value0) > 0)
     {
       if (((value >= 0) && (value < EXTRUDERS)) &&
-      ((value0 >= 0) && (value0 <= 2)))
+          ((value0 >= 0) && (value0 <= 2)))
       {
-      filament_type[value] = value0;
-      printf_P("ok\n");
+        filament_type[value] = value0;
+        printf_P("ok\n");
       }
     }
     else if (sscanf(line, PSTR("C%d"), &value) > 0)
@@ -577,7 +588,6 @@ void process_commands()
     }
   }
   else
-  { //nothing received
+  { // nothing received
   }
 }
-
