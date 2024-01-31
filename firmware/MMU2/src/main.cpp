@@ -18,11 +18,16 @@
 #include "IWatchdog.h"
 #include "trinamic.h"
 
+
+#include <OLED.h>
+
 #if (UART_COM == 1)
 FILE *uart_com = uart1io;
 #endif //(UART_COM == 1)
 
 uint8_t tmc_mode = STEALTH_MODE;
+
+OLED display=OLED(PF0,PF1,NO_RESET_PIN);
 
 namespace
 {
@@ -244,6 +249,13 @@ void unrecoverable_error()
 
 void setup(void)
 {
+  display.begin();  
+  display.draw_rectangle(0,0,127,10);
+  display.printf(1,2,"  MMU2 - BM Edition\n");
+  display.printf(1,12,"Version: %d\n", fw_version);
+  display.printf(1,22,"Build: %d\n",fw_buildnr);
+  display.display();
+  
   pinMode(LED1, OUTPUT);
   pinMode(LED2, OUTPUT);
 
@@ -282,6 +294,10 @@ void setup(void)
 #ifdef TMC_DEBUG
   test_tmc_connection();
 #endif
+
+  //display.clear();
+  
+  
   printf_P("start\r\n"); // startup message
 }
 
@@ -362,6 +378,7 @@ void manual_extruder_selector()
 void loop(void)
 {
   process_commands();
+  lcd ();
   switch (state)
   {
   case S::Setup:
@@ -421,6 +438,44 @@ void loop(void)
     break;
   }
 }
+
+void lcd (const char *status){
+    display.clear();
+    //display.draw_rectangle(0,11,127,20);
+    if (*status) {display.printf(1,2,status);}
+    (active_extruder<5)?display.printf(1,12,"Fil: %d", active_extruder+1):display.printf(1,12,"Fil: P");
+    (isFilamentLoaded)?display.printf(1+6*6,12,"L"):display.printf(1+6*6,12,"U");
+    switch (state){
+      case S::Setup:
+        display.printf(1,22,"State: Setup");
+        break;
+      case S::Printing:
+        display.printf(1,22,"State: Priting ---");
+        break;
+      case S::SignalFilament:
+        display.printf(1,22,"State: SignalFilament ---");
+        break;
+      case S::Idle:
+        display.printf(1,22,"State: Idle LMR");
+        break;
+      case S::Wait:
+        display.printf(1,22,"State: Wait -MR");
+        break;
+      case S::WaitOk:
+        display.printf(1,22,"State: WaitOK -MR");
+        break;
+      }
+    
+    
+    
+    
+    
+    
+    
+    display.display();
+
+}
+
 
 //! @brief receive and process commands from serial line
 //! @param[in,out] inout struct connected to serial line to be used

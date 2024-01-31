@@ -12,7 +12,7 @@
  *
  * Options: CHOPPER_DEFAULT_12V, CHOPPER_DEFAULT_19V, CHOPPER_DEFAULT_24V
  */
-#define CHOPPER_TIMING CHOPPER_DEFAULT_24V
+#define CHOPPER_TIMING CHOPPER_DEFAULT_12V
 
 /* Print simple drive status information
  * Note that debug mode cannot connect the motherboard normally
@@ -37,8 +37,8 @@
 
 // SG_THR stallguard treshold (sensitivity),  TMC2209: 0...255. TMC2130: 63...-64
 // !!! This setting is not universal, and the values set by different machines are different !!!
-#define TMC_SG_THR_SEL 6  // TMC2209 set to about 50, TMC2130 Set to about 31
-#define TMC_SG_THR_IDL 15 // TMC2209 set to about 20, TMC2130 Set to about 19
+#define TMC_SG_THR_SEL 12 // TMC2209 set to about 50, TMC2130 Set to about 31
+#define TMC_SG_THR_IDL 25 // TMC2209 set to about 20, TMC2130 Set to about 19
 
 #define TMC_TPOWERDOWN 68 // TCOOLTHRS default
 
@@ -53,7 +53,7 @@
   }
 #define CURRENT_RUNNING \
   {                     \
-    15, 15, 15          \
+    15, 15, 20          \
   }
 
 // Override default RSENSE value

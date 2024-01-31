@@ -67,6 +67,7 @@ bool setupMenu()
   static bool onEnter = true;
   if (onEnter)
   {
+    lcd("Setup");
     shr16_set_led(0x000);
     delay(200);
     shr16_set_led(0x2aa);
@@ -83,6 +84,7 @@ bool setupMenu()
 
   if (inBowdenCalibration)
   {
+    lcd("Bowden Cali active");
     _exit = settings_select_filament();
   }
   else
@@ -118,6 +120,7 @@ bool setupMenu()
             break;
         case 4: // exit menu
             _exit = true;
+            lcd(" ");
             break;
         }
         break;
@@ -125,6 +128,23 @@ bool setupMenu()
         if (_menu < 4) { _menu++; delay(500); }
         break;
     default:
+        break;
+    }
+    switch (_menu){
+      case 0:
+        lcd("Setup Menu");
+        break;
+      case 1:
+        lcd("Bowden Cali");
+        break;
+      case 2:
+        lcd("Eprom Erase");
+        break;
+      case 3:
+        lcd("Eprom unlock");
+        break;
+      case 4:
+        lcd("exit Setup");
         break;
     }
   }

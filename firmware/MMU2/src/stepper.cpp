@@ -187,7 +187,7 @@ void move_proportional(int _idler, int _selector)
     _idler_pos = _idler_pos + _idler_step;
 
     delayMicroseconds(delay);
-    if (delay > 900 && _selector > _start) { delay -= 10; }
+    if (delay > 900 && _selector > _start) {delay -= 10; }
     if (delay < 2500 && _selector < _end) { delay += 10; }
 
   }
@@ -208,7 +208,12 @@ void move(int _idler, int _selector, int _pulley)
     if (_pulley > 0) { pulley_step_pin_set(); }
     asm("nop");
     if (_idler > 0) { idler_step_pin_reset(); _idler--; delayMicroseconds(600); }
-    if (_selector > 0) { selector_step_pin_reset(); _selector--;  delayMicroseconds(600); }
+    if (_selector > 0)
+    {
+      selector_step_pin_reset();
+      _selector--;
+      delayMicroseconds(600);
+    }
     if (_pulley > 0) { pulley_step_pin_reset(); _pulley--;  delayMicroseconds(700); }
     asm("nop");
 
